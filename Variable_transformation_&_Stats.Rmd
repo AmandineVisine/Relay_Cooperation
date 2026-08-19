@@ -42,7 +42,7 @@ This file was produced using a [Rmarkdown Cheatsheet](https://rstudio.github.io/
 
 \
 
-*# Libraries
+# Libraries
 
 This script will automatically check if the packages are installed, and if not, install and launch them.
 
