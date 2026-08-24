@@ -98,13 +98,13 @@ We also load b) *focal_follow_relay_coop*, which describes and summarises each f
     - n_boys:             total number of boys present during the foraging trip
     - n_men:              total number of men present during the foraging trip
     - husband_presence:   presence of the focal woman's husband (and infant father); log. TRUE/FALSE
-    
+
 \
 
 Then we load c) *infant_caregiver*, a table describing the infant caregiver at any time of the trip. It has 3 columns:
-    - trip_id:      focal woman and trip ID; num. from 1 to 18
-    - caregiver:    identity of the infant caregiver at a given time (mother or girl or woman or boy or father or ground or unknown)
-    -duration:      duration of the caregiving configuration in seconds (cumulative duration for each ID equals to the total trip duration)
+  - trip_id:      focal woman and trip ID; num. from 1 to 18
+- caregiver:    identity of the infant caregiver at a given time (mother or girl or woman or boy or father or ground or unknown)
+-duration:      duration of the caregiving configuration in seconds (cumulative duration for each ID equals to the total trip duration)
 
 \
 
@@ -148,7 +148,7 @@ trip_with_girls <- which(focal_follow_relay_coop$n_girls > 0)
 
 ## Bouts tables
 
-These tables we be used to produce figure 7.
+These tables we be used to produce figure 5.
 
 \
 
@@ -222,13 +222,13 @@ for (nursing_woman in focal_follow_relay_coop$ID_focal) {
     if(nursing_w$foraging[change] == "start"){
       foraging_bout <- rbind(foraging_bout, c(nursing_woman, TRUE, nursing_w$Time[change+1] - nursing_w$Time[change]))
     } else { #if there is no forages, add their name, we'll replace by boy/girl/etc later
-      foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[change+1] - nursing_w$Time[change]))
-    }
-  }
-  
-  #Last bout where no foraging
-  foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[nrow(nursing_w)] - nursing_w$Time[nrow(nursing_w)-1]))
-  
+foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[change+1] - nursing_w$Time[change]))
+}
+}
+
+#Last bout where no foraging
+foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[nrow(nursing_w)] - nursing_w$Time[nrow(nursing_w)-1]))
+
 }  
 
 
@@ -250,9 +250,9 @@ foraging_bout$duration <- as.numeric(foraging_bout$duration)
 ```{r}
 
 walking_bout <- data.frame(
-    trip_id   = c("TEST"),
-    walks = c("TEST"),
-    duration = c("TEST"))
+  trip_id   = c("TEST"),
+  walks = c("TEST"),
+  duration = c("TEST"))
 
 for (nursing_woman in focal_follow_relay_coop$ID_focal) {
   #Keep one woman after the other
@@ -291,9 +291,9 @@ walking_bout$duration <- as.numeric(walking_bout$duration)
 ```{r}
 
 labour_bout <- data.frame(
-    trip_id   = c("TEST"),
-    labour = c("TEST"),
-    duration = c("TEST"))
+  trip_id   = c("TEST"),
+  labour = c("TEST"),
+  duration = c("TEST"))
 
 for (woman in focal_follow_relay_coop$ID_focal) {
   nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == woman)
@@ -312,7 +312,7 @@ labour_bout <- labour_bout[-1,]
 
 #Make sure it is numerical now
 labour_bout$duration <- as.numeric(labour_bout$duration)
-  
+
 
 ```
 
@@ -325,9 +325,9 @@ labour_bout$duration <- as.numeric(labour_bout$duration)
 #Although this is coded as "bouts" as it was before, the duration obtained corresponds to the START of breastfeeding behaviour from the beginning of the trip
 
 breastfeeding_bouts <- data.frame(
-    trip_id   = c("TEST"),
-    breastfeed = c("TEST"),
-    duration = c("TEST"))
+  trip_id   = c("TEST"),
+  breastfeed = c("TEST"),
+  duration = c("TEST"))
 
 for (woman in focal_follow_relay_coop$ID_focal) {
   nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == woman)
@@ -337,10 +337,10 @@ for (woman in focal_follow_relay_coop$ID_focal) {
   for (step_breast in 2:nrow(nursing_w)-1) {
     
     if(nursing_w$breastfeed[step_breast] == TRUE){
-    
+      
       breastfeeding_bouts <- rbind(breastfeeding_bouts, c(woman,
-                                          TRUE,
-                                          nursing_w$Time[step_breast] - time_initial))
+                                                          TRUE,
+                                                          nursing_w$Time[step_breast] - time_initial))
     }
   }
 }
@@ -362,20 +362,20 @@ breastfeeding_bouts$duration <- as.numeric(breastfeeding_bouts$duration)
 #Test, all ok
 
 stopifnot(sum(walking_bout$duration, na.rm = TRUE) == sum(labour_bout$duration, na.rm = TRUE),
-sum(walking_bout$duration, na.rm = TRUE) == sum(infant_caregiver$duration, na.rm = TRUE),
-sum(walking_bout$duration, na.rm = TRUE) == sum(foraging_bout$duration, na.rm = TRUE),
-sum(walking_bout$duration, na.rm = TRUE) == sum(rest_bout$duration, na.rm = TRUE))
+          sum(walking_bout$duration, na.rm = TRUE) == sum(infant_caregiver$duration, na.rm = TRUE),
+          sum(walking_bout$duration, na.rm = TRUE) == sum(foraging_bout$duration, na.rm = TRUE),
+          sum(walking_bout$duration, na.rm = TRUE) == sum(rest_bout$duration, na.rm = TRUE))
 
 ```
 
 
 # Stats & Plots
 
-## Figure 7
+## Figure 5
 
 The plots:
-
-```{r}
+  
+  ```{r}
 
 caregiver_colors <- c(
   # "boy"    = "#d29485",
@@ -453,7 +453,7 @@ for (nursing_woman in focal_follow_relay_coop$ID_focal) {
   
   subtable_labour$ymin <- numeric(nrow(subtable_labour))
   subtable_labour$ymax <- numeric(nrow(subtable_labour))
-
+  
   if (nrow(subtable_labour) > 0) {
     subtable_labour$ymin <- y_forage - bar_height
     subtable_labour$ymax <- y_forage + bar_height
@@ -461,7 +461,7 @@ for (nursing_woman in focal_follow_relay_coop$ID_focal) {
   
   subtable_rest$ymin <- numeric(nrow(subtable_rest))
   subtable_rest$ymax <- numeric(nrow(subtable_rest))
-
+  
   if (nrow(subtable_rest) > 0) {
     subtable_rest$ymin <- y_forage - bar_height
     subtable_rest$ymax <- y_forage + bar_height
@@ -473,86 +473,86 @@ for (nursing_woman in focal_follow_relay_coop$ID_focal) {
   
   # Plot
   p <- ggplot() +
-
-  # Infant holding
-  geom_rect(
-    data = subtable_info,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax,
-        fill = caregiver)
-  ) +
     
-  geom_segment(
-    data = subtable_breastfeed,
-    aes(
-      x = x, xend = x,
-      y = y_infant - bar_height,
-      yend = y_infant + bar_height
-    ),
-    colour = "darkblue",
-    linetype = "dotted",
-    linewidth = 0.8
-  ) +
-
-  # Walking (overlay on same bar)
-  geom_rect(
-    data = subtable_walking,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax),
-    fill = "#ffd690",
-    alpha = 1
-  ) +
+    # Infant holding
+    geom_rect(
+      data = subtable_info,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax,
+          fill = caregiver)
+    ) +
     
-  # Rest
-  geom_rect(
-    data = subtable_rest,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax),
-    fill = "#b8dcb8",
-    alpha = 1
-  ) +
+    geom_segment(
+      data = subtable_breastfeed,
+      aes(
+        x = x, xend = x,
+        y = y_infant - bar_height,
+        yend = y_infant + bar_height
+      ),
+      colour = "darkblue",
+      linetype = "dotted",
+      linewidth = 0.8
+    ) +
     
-  # Labour (background bar)
-  geom_rect(
-    data = subtable_labour,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax),
-    fill = "#c3b0d5",
-    alpha = 1
-  ) +
+    # Walking (overlay on same bar)
+    geom_rect(
+      data = subtable_walking,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#ffd690",
+      alpha = 1
+    ) +
     
-  # Foraging
-  geom_rect(
-    data = subtable_info_forage,
-    aes(xmin = xmin, xmax = xmax,
-        ymin = ymin, ymax = ymax),
-    fill = "#756a80",
-    alpha = 1
-  ) +
-
-  # Basket carrying
-  #geom_rect(
-  #  data = subtable_info_basket,
-  #  aes(xmin = xmin, xmax = xmax,
-  #      ymin = ymin, ymax = ymax,
-  #      fill = caregiver)
-  #) +
-
-  scale_fill_manual(values = caregiver_colors) +  
+    # Rest
+    geom_rect(
+      data = subtable_rest,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#b8dcb8",
+      alpha = 1
+    ) +
     
-  scale_x_continuous(
-    limits = c(0, 1),
-    expand = c(0, 0),
-    labels = scales::percent
-  ) +
+    # Labour (background bar)
+    geom_rect(
+      data = subtable_labour,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#c3b0d5",
+      alpha = 1
+    ) +
+    
+    # Foraging
+    geom_rect(
+      data = subtable_info_forage,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#756a80",
+      alpha = 1
+    ) +
+    
+    # Basket carrying
+    #geom_rect(
+    #  data = subtable_info_basket,
+    #  aes(xmin = xmin, xmax = xmax,
+    #      ymin = ymin, ymax = ymax,
+    #      fill = caregiver)
+    #) +
+    
+    scale_fill_manual(values = caregiver_colors) +  
+    
+    scale_x_continuous(
+      limits = c(0, 1),
+      expand = c(0, 0),
+      labels = scales::percent
+    ) +
     scale_y_continuous(
-    breaks = NULL,
-    expand = c(0, 0)
-  ) +
-  theme_void() +
-  theme(
-    legend.position = "none"
-  )
+      breaks = NULL,
+      expand = c(0, 0)
+    ) +
+    theme_void() +
+    theme(
+      legend.position = "none"
+    )
   # scale_y_continuous(
   #   breaks = c(y_basket, y_forage, y_forage+0.02, y_infant),
   #   #labels = c("Basket carrying", "Foraging (purple)", "Travelling (yellow)", #"Resting (green)", 
@@ -568,12 +568,12 @@ for (nursing_woman in focal_follow_relay_coop$ID_focal) {
   #   legend.position = "bottom",
   #   axis.text.y = element_text(size = 10)
   # )
-
+  
   
   print(p)
   
   ggsave(filename = paste(nursing_woman, "_switch.png"),
-       width = 10, height = 6, dpi = 300)
+         width = 10, height = 6, dpi = 300)
   
 }
 
@@ -761,7 +761,7 @@ for (woman in unique(infant_caregiver$trip_id[-1])) {
     for (i in seq_len(nrow(infant))) {
       for (j in seq_len(nrow(forage_true))) {
         overlap <- max(0, min(infant$xmax[i], forage_true$xmax[j]) -
-                          max(infant$xmin[i], forage_true$xmin[j]))
+                         max(infant$xmin[i], forage_true$xmin[j]))
         if (overlap > 0) {
           infant$mother_foraging[i] <- TRUE
         }
@@ -776,8 +776,8 @@ for (woman in unique(infant_caregiver$trip_id[-1])) {
     ifelse(infant$mother_foraging, "F_mother", "notF"),
     "_",
     ifelse(infant$caregiver == "mother", "C_mother",
-    ifelse(infant$caregiver == "girl",   "C_girl",
-                                          paste0("C_", infant$caregiver)))
+           ifelse(infant$caregiver == "girl",   "C_girl",
+                  paste0("C_", infant$caregiver)))
   )
   
   #------------------
@@ -838,11 +838,11 @@ cat("Trips with at least one such transition:",
 
 cat("\n=== Per trip overview ===\n")
 print(focal_follow_relay_coop[, c("ID_focal",
-                                   "of3_Fmother_Cmother_duration",
-                                   "of3_Fmother_Cmother_number",
-                                   "of4_Fmother_Cgirl_duration",
-                                   "of4_Fmother_Cgirl_number",
-                                   "of5_transition_FmCm_to_FmCg")])
+                                  "of3_Fmother_Cmother_duration",
+                                  "of3_Fmother_Cmother_number",
+                                  "of4_Fmother_Cgirl_duration",
+                                  "of4_Fmother_Cgirl_number",
+                                  "of5_transition_FmCm_to_FmCg")])
 
 ```
 
@@ -1079,7 +1079,7 @@ sd(focal_follow_relay_coop$ob14_transition_Bground_Bgirl_total[trip_with_girls],
 
 \
 
-## Figure 6
+## Figure 4
 
 \
 
@@ -1151,18 +1151,17 @@ childcare_frac <- childcare_duration_detailed %>%
   ungroup()
 
 # Rename ? to unknown
-childcare_frac$caregiver[childcare_frac$caregiver == "?"] <- "unknown"
-childcare_frac$caregiver[childcare_frac$caregiver == "Ground"] <- "ground"
+childcare_frac$caregiver[childcare_frac$caregiver %in% c("Ground", "?")] <- "ground"
 
 # Set factor order (bottom to top in stacked bar)
 childcare_frac$caregiver <- factor(
   childcare_frac$caregiver,
-  levels = c("unknown", "ground", "father", "boy", "girl", "woman", "mother")
+  levels = c("ground", "father", "boy", "girl", "woman", "mother")
 )
 
 # Assign trip numbers 1 to 18 in the order they appear
 childcare_frac$trip_number <- as.numeric(factor(childcare_frac$trip_id,
-                                             levels = unique(childcare_frac$trip_id)))
+                                                levels = unique(childcare_frac$trip_id)))
 childcare_frac$trip_number <- factor(childcare_frac$trip_number)
 
 ggplot(childcare_frac,
@@ -1170,29 +1169,29 @@ ggplot(childcare_frac,
   geom_bar(stat = "identity", position = "stack") +
   scale_fill_manual(values = caregiver_colours) +
   labs(
-    x = "Focal woman",
-    y = "Proportion of trip time",
-    fill = "Caregiver",
-    title = "Proportion of childcare time by caregiver"
+    x = "Focal trip",
+    y = "Proportion of trip duration",
+    fill = "Category",
+    title = "A. Infant care"
   ) +
   theme_minimal() +
   theme(# Plot title
     plot.title = element_text(size = 16),
-
+    
     # Axis titles
     axis.title.x = element_text(size = 16),
     axis.title.y = element_text(size = 16),
-
+    
     # Axis tick labels (numbers/text)
     axis.text.x = element_text(size = 16, angle = 0, hjust = 1),
     axis.text.y = element_text(size = 16),
-
+    
     # Legend
     legend.title = element_text(size = 16),
     legend.text = element_text(size = 16)
-    )
+  )
 
-ggsave("duration_prop_childcare.png",
+ggsave("duration_prop_childcare.pdf",
        width = 10, height = 6, dpi = 300)
 
 ```
@@ -1238,13 +1237,12 @@ basket_frac <- basket_duration_detailed %>%
   ungroup()
 
 # Rename to match colour vector
-basket_frac$caregiver[basket_frac$caregiver == "?"] <- "unknown"
-basket_frac$caregiver[basket_frac$caregiver == "Ground"] <- "ground"
+basket_frac$caregiver[basket_frac$caregiver %in% c("Ground", "?")] <- "ground"
 
 # Set factor order (bottom to top in stacked bar)
 basket_frac$caregiver <- factor(
   basket_frac$caregiver,
-  levels = c("unknown", "ground", "father", "boy", "girl", "woman", "mother")
+  levels = c("ground", "father", "boy", "girl", "woman", "mother")
 )
 
 # Assign trip numbers 1 to 18 in the order they appear
@@ -1257,30 +1255,30 @@ ggplot(basket_frac,
   geom_bar(stat = "identity", position = "stack") +
   scale_fill_manual(values = caregiver_colours) +
   labs(
-    x = "Focal woman",
-    y = "Proportion of trip time",
-    fill = "Caregiver",
-    title = "Proportion of basket-carrying time by caregiver",
+    x = "Focal trip",
+    y = "Proportion of trip duration",
+    fill = "Category",
+    title = "B. Basket carrying",
     size = 16
   ) +
   theme_minimal() +
   theme(# Plot title
     plot.title = element_text(size = 16),
-
+    
     # Axis titles
     axis.title.x = element_text(size = 16),
     axis.title.y = element_text(size = 16),
-
+    
     # Axis tick labels (numbers/text)
     axis.text.x = element_text(size = 16, angle = 0, hjust = 1),
     axis.text.y = element_text(size = 16),
-
+    
     # Legend
     legend.title = element_text(size = 16),
     legend.text = element_text(size = 16)
-    )
+  )
 
-ggsave("duration_prop_basket.png",
+ggsave("duration_prop_basket.pdf",
        width = 10, height = 6, dpi = 300)
 
 ```
@@ -1334,7 +1332,7 @@ sd(basket_floor_pct$floor_pct)
 
 \
 
-## Figure 8
+## Figure 6
 
 ```{r}
 
