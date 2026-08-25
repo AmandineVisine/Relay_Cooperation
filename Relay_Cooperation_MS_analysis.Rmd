@@ -1,0 +1,1985 @@
+---
+title: "Relay Cooperation: Reproducible Analysis"
+author: "A. Visine"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    code_folding: show
+---
+
+# Setup
+
+This script reproduces the principal table and figures in manuscript order:
+Table 1, Figure 4, Figure 5, Figure 6, followed by supplementary analyses.
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r libraries}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+```
+
+# Load data
+
+```{r load-data}
+Waypoints_relay_coop <- read_delim(
+  "Waypoints_relay_coop.csv",
+  col_names = TRUE,
+  delim = ","
+)
+
+focal_follow_relay_coop <- read_delim(
+  "focal_follow_relay_coop.csv",
+  col_names = TRUE,
+  delim = ","
+)
+
+infant_caregiver <- read_delim(
+  "infant_caregiver.csv",
+  col_names = TRUE,
+  delim = ","
+)
+
+basket_carrier <- read_delim(
+  "basket_carrier.csv",
+  col_names = TRUE,
+  delim = ","
+)
+```
+
+# Transformation
+
+## Trips with girls
+
+```{r}
+
+#List of trips where girls are present (13 trips)
+
+trip_with_girls <- which(focal_follow_relay_coop$n_girls > 0)
+
+# Explicit trip IDs for analyses that subset by trip_id
+trips_with_girls <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_girls > 0
+]
+
+```
+
+\
+
+## Bouts tables
+
+These tables we be used to produce figure 5.
+
+\
+
+### Resting bouts
+
+```{r}
+
+rest_bout <- data.frame(
+    trip_id   = c("TEST"),
+    rest = c("TEST"),
+    duration = c("TEST"))
+
+for (woman in focal_follow_relay_coop$ID_focal) {
+  nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == woman)
+  
+  for (step_rest in 2:nrow(nursing_w)-1) {
+    
+    rest_bout <- rbind(rest_bout, c(woman,
+                                        nursing_w$resting_behaviour[step_rest],
+                                        nursing_w$Time[step_rest+1] - nursing_w$Time[step_rest]))
+  
+    
+  }
+}
+
+#Delete TEST row
+rest_bout <- rest_bout[-1,]
+
+#Make sure it is numerical now
+rest_bout$duration <- as.numeric(rest_bout$duration)
+
+#Make sure it is logical now
+#rest_bout$rest <- as.logical.factor(rest_bout$duration)
+
+
+```
+
+\
+
+### Foraging bouts
+
+- Foraging
+
+```{r}
+
+foraging_bout <- data.frame(
+    trip_id   = c("TEST"),
+    forages = c("TEST"),
+    duration = c("TEST"))
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  #Keep one woman after the other
+  nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == nursing_woman)
+  
+  #Keep the first and last row, to know when the trip is ending, for duration calculation
+  first_row <- nursing_w[1,]
+  last_row <- nursing_w[nrow(nursing_w),]
+  
+  #Keep only changes in forages
+  nursing_w <- subset(nursing_w, is.na(nursing_w$foraging) == FALSE)
+  
+  #Add back the last row
+  nursing_w <- rbind(first_row, nursing_w, last_row)
+  
+  #First bout where no foraging
+  foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[2] - nursing_w$Time[1]))
+  
+  #For each change in foraging
+  for (change in 4:nrow(nursing_w)-2) {
+    #If the mother forages, add TRUE in the bout file
+    if(nursing_w$foraging[change] == "start"){
+      foraging_bout <- rbind(foraging_bout, c(nursing_woman, TRUE, nursing_w$Time[change+1] - nursing_w$Time[change]))
+    } else { #if there is no forages, add their name, we'll replace by boy/girl/etc later
+foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[change+1] - nursing_w$Time[change]))
+}
+}
+
+#Last bout where no foraging
+foraging_bout <- rbind(foraging_bout, c(nursing_woman, FALSE, nursing_w$Time[nrow(nursing_w)] - nursing_w$Time[nrow(nursing_w)-1]))
+
+}  
+
+
+#Delete the TEST row
+foraging_bout <- foraging_bout[-1,]
+
+#Make sure it is numerical now
+foraging_bout$duration <- as.numeric(foraging_bout$duration)
+
+
+```
+
+\
+
+### Walking bouts
+
+- Waking
+
+```{r}
+
+walking_bout <- data.frame(
+  trip_id   = c("TEST"),
+  walks = c("TEST"),
+  duration = c("TEST"))
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  #Keep one woman after the other
+  nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == nursing_woman)
+  
+  
+  #Keep only changes in walking
+  nursing_w <- subset(nursing_w, is.na(nursing_w$walking) == FALSE)
+  
+  
+  #For each change in walking
+  for (change in 2:nrow(nursing_w)-1) {
+    #If the mother walks, add TRUE in the bout file
+    if(nursing_w$walking[change] == "start"){
+      walking_bout <- rbind(walking_bout, c(nursing_woman, TRUE, nursing_w$Time[change+1] - nursing_w$Time[change]))
+    } else { #if there is no walks, add their name, we'll replace by boy/girl/etc later
+      walking_bout <- rbind(walking_bout, c(nursing_woman, FALSE, nursing_w$Time[change+1] - nursing_w$Time[change]))
+    }
+  }
+  
+}  
+
+#Delete the TEST row
+walking_bout <- walking_bout[-1,]
+
+#Make sure it is numerical now
+walking_bout$duration <- as.numeric(walking_bout$duration)
+
+
+```
+
+\
+
+### Labour bouts
+
+```{r}
+
+labour_bout <- data.frame(
+  trip_id   = c("TEST"),
+  labour = c("TEST"),
+  duration = c("TEST"))
+
+for (woman in focal_follow_relay_coop$ID_focal) {
+  nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == woman)
+  
+  for (step_labour in 2:nrow(nursing_w)-1) {
+    
+    labour_bout <- rbind(labour_bout, c(woman,
+                                        nursing_w$labour[step_labour],
+                                        nursing_w$Time[step_labour+1] - nursing_w$Time[step_labour]))
+  }
+}
+
+
+#Delete the TEST row
+labour_bout <- labour_bout[-1,]
+
+#Make sure it is numerical now
+labour_bout$duration <- as.numeric(labour_bout$duration)
+
+
+```
+
+\
+
+### Breastfeeding
+
+```{r}
+
+#Although this is coded as "bouts" as it was before, the duration obtained corresponds to the START of breastfeeding behaviour from the beginning of the trip
+
+breastfeeding_bouts <- data.frame(
+  trip_id   = c("TEST"),
+  breastfeed = c("TEST"),
+  duration = c("TEST"))
+
+for (woman in focal_follow_relay_coop$ID_focal) {
+  nursing_w <- subset(Waypoints_relay_coop, Waypoints_relay_coop$ID_focal == woman)
+  
+  time_initial <- nursing_w$Time[1]
+  
+  for (step_breast in 2:nrow(nursing_w)-1) {
+    
+    if(nursing_w$breastfeed[step_breast] == TRUE){
+      
+      breastfeeding_bouts <- rbind(breastfeeding_bouts, c(woman,
+                                                          TRUE,
+                                                          nursing_w$Time[step_breast] - time_initial))
+    }
+  }
+}
+
+breastfeeding_bouts <- breastfeeding_bouts[-1,]
+
+#Make sure it is numerical now
+breastfeeding_bouts$duration <- as.numeric(breastfeeding_bouts$duration)
+
+
+
+```
+
+
+### Verification
+
+```{r}
+
+#Test, all ok
+
+stopifnot(sum(walking_bout$duration, na.rm = TRUE) == sum(labour_bout$duration, na.rm = TRUE),
+          sum(walking_bout$duration, na.rm = TRUE) == sum(infant_caregiver$duration, na.rm = TRUE),
+          sum(walking_bout$duration, na.rm = TRUE) == sum(foraging_bout$duration, na.rm = TRUE),
+          sum(walking_bout$duration, na.rm = TRUE) == sum(rest_bout$duration, na.rm = TRUE))
+
+```
+
+# Table 1: Assistance during foraging trips
+
+This analysis calculates the frequency and duration of infant-care and
+basket-carrying assistance during focal women's foraging trips.
+
+For age- and gender-specific categories, calculations include only trips in
+which at least one member of that category was present. A category that was
+present but did not provide assistance contributes a value of zero. Trips in
+which the category was absent are excluded.
+
+For the pooled ``Any other group member'' category, calculations are restricted
+to the 17 trips in which the focal woman was accompanied by at least one other
+group member.
+
+
+## 1. Prepare infant-care data
+
+The unknown infant-care category (`?`) is combined with `Ground`.
+
+```{r prepare-infant-data}
+infant_caregiver2 <- infant_caregiver %>%
+  mutate(
+    caregiver = ifelse(caregiver == "?", "Ground", caregiver)
+  )
+```
+
+## 2. Identify trips in which each category was present
+
+```{r category-presence}
+trips_women_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_women > 0
+]
+
+trips_men_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_men > 0
+]
+
+trips_girls_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_girls > 0
+]
+
+trips_boys_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_boys > 0
+]
+
+trips_accompanied <- focal_follow_relay_coop %>%
+  filter(
+    n_women > 0 |
+    n_men > 0 |
+    n_girls > 0 |
+    n_boys > 0
+  ) %>%
+  pull(ID_focal)
+```
+
+### Check denominators
+
+These should reproduce the denominators used in Table 1.
+
+```{r check-denominators}
+length(trips_accompanied)    # expected: 17
+length(trips_women_present)  # expected: 14
+length(trips_men_present)    # expected: 6
+length(trips_girls_present)  # expected: 13
+length(trips_boys_present)   # expected: 11
+```
+
+# Infant care
+
+## 3. Calculate trip-level infant-care percentages
+
+For each trip, calculate the percentage of total trip duration associated with
+each infant-care category.
+
+```{r infant-trip-percentages}
+caregiver_trip <- infant_caregiver2 %>%
+  group_by(trip_id, caregiver) %>%
+  summarise(
+    duration = sum(duration, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(trip_id) %>%
+  mutate(
+    percent = duration / sum(duration, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+```
+
+## 4. Infant care by category, conditional on presence
+
+If a category was present but did not provide infant care, the trip contributes
+0%. If the category was absent, the trip is excluded.
+
+```{r infant-summary-function}
+summarise_care_when_present <- function(category, trips_present) {
+
+  x <- data.frame(trip_id = trips_present) %>%
+    left_join(
+      caregiver_trip %>%
+        filter(caregiver == category) %>%
+        select(trip_id, percent),
+      by = "trip_id"
+    ) %>%
+    mutate(
+      percent = replace_na(percent, 0)
+    )
+
+  x %>%
+    summarise(
+      caregiver = category,
+      N_present = n(),
+      N_helped = sum(percent > 0),
+      pct_trips_helped = N_helped / N_present * 100,
+      mean = mean(percent),
+      sd = sd(percent),
+      min = min(percent),
+      max = max(percent)
+    )
+}
+```
+
+```{r infant-category-summary}
+caregiver_summary_present <- bind_rows(
+  summarise_care_when_present("woman",  trips_women_present),
+  summarise_care_when_present("father", trips_men_present),
+  summarise_care_when_present("girl",   trips_girls_present),
+  summarise_care_when_present("boy",    trips_boys_present)
+)
+
+caregiver_summary_present
+```
+
+Expected frequencies:
+
+- Other women: 8/14
+- Fathers: 4/6
+- Girls: 9/13
+- Boys: 4/11
+
+## 5. Infant-care assistance from any other group member
+
+`mother` and `Ground` are excluded when defining assistance from another
+individual.
+
+```{r infant-any-helper}
+infant_help_trip <- infant_caregiver2 %>%
+  filter(trip_id %in% trips_accompanied) %>%
+  mutate(
+    other_help = !caregiver %in% c("mother", "Ground")
+  ) %>%
+  group_by(trip_id) %>%
+  summarise(
+    total_duration = sum(duration, na.rm = TRUE),
+    other_duration = sum(duration[other_help], na.rm = TRUE),
+    percent_other = other_duration / total_duration * 100,
+    .groups = "drop"
+  )
+
+infant_help_summary <- infant_help_trip %>%
+  summarise(
+    N = n(),
+    N_helped = sum(other_duration > 0),
+    percent_trips_helped = N_helped / N * 100,
+    mean = mean(percent_other),
+    sd = sd(percent_other),
+    min = min(percent_other),
+    max = max(percent_other)
+  )
+
+infant_help_summary
+```
+
+Expected result: **17/17 (100%)**, mean = **38.9%**, SD = **27.0%**,
+range = **1.9--100.0%**.
+
+# Basket carrying
+
+## 6. Calculate trip-level basket-carrying percentages
+
+```{r basket-trip-percentages}
+basket_trip <- basket_carrier %>%
+  group_by(trip_id, caregiver) %>%
+  summarise(
+    duration = sum(duration, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(trip_id) %>%
+  mutate(
+    percent = duration / sum(duration, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+```
+
+## 7. Basket carrying by category, conditional on presence
+
+```{r basket-summary-function}
+summarise_basket_when_present <- function(category, trips_present) {
+
+  x <- data.frame(trip_id = trips_present) %>%
+    left_join(
+      basket_trip %>%
+        filter(caregiver == category) %>%
+        select(trip_id, percent),
+      by = "trip_id"
+    ) %>%
+    mutate(
+      percent = replace_na(percent, 0)
+    )
+
+  x %>%
+    summarise(
+      caregiver = category,
+      N_present = n(),
+      N_carried = sum(percent > 0),
+      pct_trips_carried = N_carried / N_present * 100,
+      mean = mean(percent),
+      sd = sd(percent),
+      min = min(percent),
+      max = max(percent)
+    )
+}
+```
+
+```{r basket-category-summary}
+basket_summary_present <- bind_rows(
+  summarise_basket_when_present("woman",  trips_women_present),
+  summarise_basket_when_present("father", trips_men_present),
+  summarise_basket_when_present("girl",   trips_girls_present),
+  summarise_basket_when_present("boy",    trips_boys_present)
+)
+
+basket_summary_present
+```
+
+Expected frequencies:
+
+- Other women: 4/14
+- Fathers: 0/6
+- Girls: 8/13
+- Boys: 3/11
+
+## 8. Basket-carrying assistance from any other group member
+
+```{r basket-any-helper}
+basket_help_trip <- basket_carrier %>%
+  filter(trip_id %in% trips_accompanied) %>%
+  mutate(
+    other_help = !caregiver %in% c("mother", "Ground")
+  ) %>%
+  group_by(trip_id) %>%
+  summarise(
+    total_duration = sum(duration, na.rm = TRUE),
+    other_duration = sum(duration[other_help], na.rm = TRUE),
+    percent_other = other_duration / total_duration * 100,
+    .groups = "drop"
+  )
+
+basket_help_summary <- basket_help_trip %>%
+  summarise(
+    N = n(),
+    N_helped = sum(other_duration > 0),
+    percent_trips_helped = N_helped / N * 100,
+    mean = mean(percent_other),
+    sd = sd(percent_other),
+    min = min(percent_other),
+    max = max(percent_other)
+  )
+
+basket_help_summary
+```
+
+Expected result: **12/17 (70.6%)**, mean = **18.5%**, SD = **21.2%**,
+range = **0.0--67.7%**.
+
+# Final checks
+
+The frequencies calculated from the duration data should reproduce the
+frequencies reported in Table 1.
+
+```{r final-checks}
+caregiver_summary_present %>%
+  select(caregiver, N_present, N_helped, pct_trips_helped)
+
+basket_summary_present %>%
+  select(caregiver, N_present, N_carried, pct_trips_carried)
+
+infant_help_summary
+
+basket_help_summary
+```
+
+# Figure 4
+
+\
+
+### Childcare duration
+
+```{r}
+
+childcare_duration <- data.frame()
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  
+  infant <- subset(infant_caregiver,
+                   trip_id == nursing_woman)
+  
+  mother_duration <- sum(infant$duration[infant$caregiver == "mother"], na.rm = TRUE)
+  ground_duration  <- sum(infant$duration[infant$caregiver == "Ground"], na.rm = TRUE)
+  other_duration  <- sum(infant$duration[!infant$caregiver %in% c("mother", "Ground")], na.rm = TRUE)
+  
+  childcare_duration <- rbind(
+    childcare_duration,
+    data.frame(
+      trip_id         = nursing_woman,
+      mother_duration = mother_duration,
+      ground_duration = ground_duration,
+      other_duration  = other_duration
+    )
+  )
+}
+
+childcare_duration
+childcare_duration[trip_with_girls,]
+
+```
+
+```{r}
+
+childcare_duration_detailed <- data.frame()
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  
+  infant <- subset(infant_caregiver,
+                   trip_id == nursing_woman)
+  
+  by_caregiver <- aggregate(duration ~ caregiver, data = infant, sum)
+  by_caregiver$trip_id <- nursing_woman
+  
+  childcare_duration_detailed <- rbind(childcare_duration_detailed, by_caregiver)
+}
+
+childcare_duration_detailed
+
+```
+
+```{r}
+
+caregiver_colours <- c(
+  "mother"  = "#85abd2",
+  "woman"   = "#85d2b9",
+  "girl"    = "#85d270",
+  "boy"     = "#d29485",
+  "father"  = "#d294b3",
+  "ground"  = "#d2ab85",
+  "unknown" = "grey"
+)
+
+childcare_frac <- childcare_duration_detailed %>%
+  group_by(trip_id) %>%
+  mutate(frac = duration / sum(duration)) %>%
+  ungroup()
+
+# Rename ? to unknown
+childcare_frac$caregiver[childcare_frac$caregiver %in% c("Ground", "?")] <- "ground"
+
+# Set factor order (bottom to top in stacked bar)
+childcare_frac$caregiver <- factor(
+  childcare_frac$caregiver,
+  levels = c("ground", "father", "boy", "girl", "woman", "mother")
+)
+
+# Assign trip numbers 1 to 18 in the order they appear
+childcare_frac$trip_number <- as.numeric(factor(childcare_frac$trip_id,
+                                                levels = unique(childcare_frac$trip_id)))
+childcare_frac$trip_number <- factor(childcare_frac$trip_number)
+
+ggplot(childcare_frac,
+       aes(x = trip_number, y = frac, fill = caregiver)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_manual(values = caregiver_colours) +
+  labs(
+    x = "Focal trip",
+    y = "Proportion of trip duration",
+    fill = "Category",
+    title = "A. Infant care"
+  ) +
+  theme_minimal() +
+  theme(# Plot title
+    plot.title = element_text(size = 16),
+    
+    # Axis titles
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    
+    # Axis tick labels (numbers/text)
+    axis.text.x = element_text(size = 16, angle = 0, hjust = 1),
+    axis.text.y = element_text(size = 16),
+    
+    # Legend
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16)
+  )
+
+ggsave("duration_prop_childcare.pdf",
+       width = 10, height = 6, dpi = 300)
+
+```
+
+\
+
+```{r}
+
+#Just mother percentage
+summary(c(childcare_frac$frac[which(childcare_frac$caregiver == "mother")], 0))
+sd(c(childcare_frac$frac[which(childcare_frac$caregiver == "mother")], 0))
+
+```
+
+\
+
+### Basket duration
+
+```{r}
+
+basket_duration_detailed <- data.frame()
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  
+  basket <- subset(basket_carrier,
+                   trip_id == nursing_woman)
+  
+  by_caregiver <- aggregate(duration ~ caregiver, data = basket, sum)
+  by_caregiver$trip_id <- nursing_woman
+  
+  basket_duration_detailed <- rbind(basket_duration_detailed, by_caregiver)
+}
+
+basket_duration_detailed
+
+```
+
+```{r}
+
+basket_frac <- basket_duration_detailed %>%
+  group_by(trip_id) %>%
+  mutate(frac = duration / sum(duration)) %>%
+  ungroup()
+
+# Rename to match colour vector
+basket_frac$caregiver[basket_frac$caregiver %in% c("Ground", "?")] <- "ground"
+
+# Set factor order (bottom to top in stacked bar)
+basket_frac$caregiver <- factor(
+  basket_frac$caregiver,
+  levels = c("ground", "father", "boy", "girl", "woman", "mother")
+)
+
+# Assign trip numbers 1 to 18 in the order they appear
+basket_frac$trip_number <- as.numeric(factor(basket_frac$trip_id,
+                                             levels = unique(basket_frac$trip_id)))
+basket_frac$trip_number <- factor(basket_frac$trip_number)
+
+ggplot(basket_frac,
+       aes(x = trip_number, y = frac, fill = caregiver)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_manual(values = caregiver_colours) +
+  labs(
+    x = "Focal trip",
+    y = "Proportion of trip duration",
+    fill = "Category",
+    title = "B. Basket carrying",
+    size = 16
+  ) +
+  theme_minimal() +
+  theme(# Plot title
+    plot.title = element_text(size = 16),
+    
+    # Axis titles
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    
+    # Axis tick labels (numbers/text)
+    axis.text.x = element_text(size = 16, angle = 0, hjust = 1),
+    axis.text.y = element_text(size = 16),
+    
+    # Legend
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 16)
+  )
+
+ggsave("duration_prop_basket.pdf",
+       width = 10, height = 6, dpi = 300)
+
+```
+
+\
+
+```{r}
+
+#Just mother percentage
+summary(basket_frac$frac[which(basket_frac$caregiver == "mother")])
+sd(basket_frac$frac[which(basket_frac$caregiver == "mother")])
+
+#Just ground percentage
+summary(basket_frac$frac[which(basket_frac$caregiver == "ground")])
+sd(basket_frac$frac[which(basket_frac$caregiver == "ground")])
+
+```
+
+\
+
+### On the ground
+
+```{r}
+
+basket_floor_pct <- data.frame()
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  
+  basket <- subset(basket_carrier,
+                   trip_id == nursing_woman)
+  
+  total_duration <- sum(basket$duration, na.rm = TRUE)
+  floor_duration <- sum(basket$duration[basket$caregiver == "Ground"], na.rm = TRUE)
+  
+  basket_floor_pct <- rbind(
+    basket_floor_pct,
+    data.frame(
+      trip_id    = nursing_woman,
+      floor_duration = floor_duration,
+      total_duration = total_duration,
+      floor_pct  = floor_duration / total_duration * 100
+    )
+  )
+}
+
+basket_floor_pct
+summary(basket_floor_pct$floor_pct)
+sd(basket_floor_pct$floor_pct)
+
+```
+
+\
+
+# Figure 5
+
+The plotting code below generates the temporal caregiving/activity panels. The following subsections reproduce the childcare- and basket-transfer statistics reported in the Results.
+
+
+The plots:
+  
+  ```{r}
+
+caregiver_colors <- c(
+  # "boy"    = "#d29485",
+  "girl"   = "#85d285",
+  #"woman"  = "#85d2b3",
+  "other"  = "grey",
+  "mother" = "#85abd2",
+  "Ground" = "#d2ab85"
+)
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+  
+  subtable_info <- subset(infant_caregiver, infant_caregiver$trip_id == nursing_woman)
+  subtable_info_basket <- subset(basket_carrier, basket_carrier$trip_id == nursing_woman)
+  subtable_info_forage <- subset(foraging_bout, foraging_bout$trip_id == nursing_woman)
+  subtable_walking <- subset(walking_bout, trip_id == nursing_woman)
+  subtable_labour <-  subset(labour_bout, trip_id == nursing_woman)
+  subtable_rest <-  subset(rest_bout, trip_id == nursing_woman)
+  subtable_breastfeed <- subset(breastfeeding_bouts, trip_id == nursing_woman & breastfeed == 1)
+  
+  
+  # Compute cumulative positions
+  subtable_info$frac <- subtable_info$duration / sum(subtable_info$duration)
+  subtable_info$xmax <- cumsum(subtable_info$frac)
+  subtable_info$xmin <- c(0, head(subtable_info$xmax, -1))
+  
+  subtable_info_basket$frac <- subtable_info_basket$duration / sum(subtable_info_basket$duration)
+  subtable_info_basket$xmax <- cumsum(subtable_info_basket$frac)
+  subtable_info_basket$xmin <- c(0, head(subtable_info_basket$xmax, -1))
+  
+  subtable_info_forage$frac <- subtable_info_forage$duration / sum(subtable_info_forage$duration)
+  subtable_info_forage$xmax <- cumsum(subtable_info_forage$frac)
+  subtable_info_forage$xmin <- c(0, head(subtable_info_forage$xmax, -1))
+  
+  subtable_walking$frac <- subtable_walking$duration / sum(subtable_walking$duration)
+  subtable_walking$xmax <- cumsum(subtable_walking$frac)
+  subtable_walking$xmin <- c(0, head(subtable_walking$xmax, -1))
+  
+  subtable_labour$frac <- subtable_labour$duration / sum(subtable_labour$duration)
+  subtable_labour$xmax <- cumsum(subtable_labour$frac)
+  subtable_labour$xmin <- c(0, head(subtable_labour$xmax, -1))
+  
+  subtable_rest$frac <- subtable_rest$duration / sum(subtable_rest$duration)
+  subtable_rest$xmax <- cumsum(subtable_rest$frac)
+  subtable_rest$xmin <- c(0, head(subtable_rest$xmax, -1))
+  
+  subtable_breastfeed$x <- subtable_breastfeed$duration / sum(subtable_info$duration)
+  
+  # Keep only walking and foraging TRUE
+  subtable_walking <- subset(subtable_walking, walks == 1)
+  subtable_info_forage <- subset(subtable_info_forage, subtable_info_forage$forages == 1)
+  subtable_labour <- subset(subtable_labour, labour == 1)
+  subtable_rest <- subset(subtable_rest, rest == 1)
+  
+  #Keep only mother and girls
+  #subtable_info <- subset(subtable_info, subtable_info$caregiver %in% c("mother", "girl", "Ground"))
+  #subtable_info_basket <- subset(subtable_info_basket, subtable_info_basket$caregiver %in% c("mother", "girl", "Ground"))
+  
+  #Assign bar position
+  bar_height <- 0.05
+  
+  y_infant   <-  0.20
+  y_forage   <-  0.10
+  y_basket   <-  0.00
+  
+  
+  subtable_info$ymin <- y_infant - bar_height
+  subtable_info$ymax <- y_infant + bar_height
+  
+  subtable_info_forage$ymin <- y_forage - bar_height
+  subtable_info_forage$ymax <- y_forage + bar_height
+  
+  subtable_walking$ymin <- y_forage - bar_height
+  subtable_walking$ymax <- y_forage + bar_height
+  
+  subtable_labour$ymin <- numeric(nrow(subtable_labour))
+  subtable_labour$ymax <- numeric(nrow(subtable_labour))
+  
+  if (nrow(subtable_labour) > 0) {
+    subtable_labour$ymin <- y_forage - bar_height
+    subtable_labour$ymax <- y_forage + bar_height
+  }
+  
+  subtable_rest$ymin <- numeric(nrow(subtable_rest))
+  subtable_rest$ymax <- numeric(nrow(subtable_rest))
+  
+  if (nrow(subtable_rest) > 0) {
+    subtable_rest$ymin <- y_forage - bar_height
+    subtable_rest$ymax <- y_forage + bar_height
+  }
+  
+  subtable_info_basket$ymin <- y_basket - bar_height
+  subtable_info_basket$ymax <- y_basket + bar_height
+  
+  
+  # Plot
+  p <- ggplot() +
+    
+    # Infant holding
+    geom_rect(
+      data = subtable_info,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax,
+          fill = caregiver)
+    ) +
+    
+    geom_segment(
+      data = subtable_breastfeed,
+      aes(
+        x = x, xend = x,
+        y = y_infant - bar_height,
+        yend = y_infant + bar_height
+      ),
+      colour = "darkblue",
+      linetype = "dotted",
+      linewidth = 0.8
+    ) +
+    
+    # Walking (overlay on same bar)
+    geom_rect(
+      data = subtable_walking,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#ffd690",
+      alpha = 1
+    ) +
+    
+    # Rest
+    geom_rect(
+      data = subtable_rest,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#b8dcb8",
+      alpha = 1
+    ) +
+    
+    # Labour (background bar)
+    geom_rect(
+      data = subtable_labour,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#c3b0d5",
+      alpha = 1
+    ) +
+    
+    # Foraging
+    geom_rect(
+      data = subtable_info_forage,
+      aes(xmin = xmin, xmax = xmax,
+          ymin = ymin, ymax = ymax),
+      fill = "#756a80",
+      alpha = 1
+    ) +
+    
+    # Basket carrying
+    #geom_rect(
+    #  data = subtable_info_basket,
+    #  aes(xmin = xmin, xmax = xmax,
+    #      ymin = ymin, ymax = ymax,
+    #      fill = caregiver)
+    #) +
+    
+    scale_fill_manual(values = caregiver_colors) +  
+    
+    scale_x_continuous(
+      limits = c(0, 1),
+      expand = c(0, 0),
+      labels = scales::percent
+    ) +
+    scale_y_continuous(
+      breaks = NULL,
+      expand = c(0, 0)
+    ) +
+    theme_void() +
+    theme(
+      legend.position = "none"
+    )
+  # scale_y_continuous(
+  #   breaks = c(y_basket, y_forage, y_forage+0.02, y_infant),
+  #   #labels = c("Basket carrying", "Foraging (purple)", "Travelling (yellow)", #"Resting (green)", 
+  #   #           "Infant carrying"),
+  #   expand = c(0, 0)
+  # ) +
+  # theme_void() +
+  # # labs(
+  # #   fill = "Caregiver"#,
+  # #   #title = paste("Caregiving, foraging and travelling –", nursing_woman)
+  # # ) +
+  # theme(
+  #   legend.position = "bottom",
+  #   axis.text.y = element_text(size = 10)
+  # )
+  
+  
+  print(p)
+  
+  ggsave(filename = paste(nursing_woman, "_switch.png"),
+         width = 10, height = 6, dpi = 300)
+  
+}
+
+```
+
+\
+
+## Childcare transfer statistics used in the Results
+
+\
+
+### With Ground
+
+(1) the timing and frequency of childcare transfers, defined as shifts in responsibility for the infant between mothers and other group members (e.g., transitions from mother carrying to another individual carrying; C$_{mother}$ → C$_{other}$);
+
+```{r}
+
+#==================
+# Helper: collapse consecutive duplicate caregivers
+#==================
+collapse_consecutive <- function(df) {
+  if (nrow(df) <= 1) return(df)
+  
+  collapsed <- df[1, , drop = FALSE]
+  
+  for (row in 2:nrow(df)) {
+    if (df$caregiver[row] == collapsed$caregiver[nrow(collapsed)]) {
+      # Same caregiver as previous row — accumulate duration
+      collapsed$duration[nrow(collapsed)] <- collapsed$duration[nrow(collapsed)] + df$duration[row]
+    } else {
+      # New caregiver — add a new row
+      collapsed <- rbind(collapsed, df[row, , drop = FALSE])
+    }
+  }
+  return(collapsed)
+}
+
+#==================
+# of1: all transfers (including ground)
+#==================
+focal_follow_relay_coop$of1_childtransfer_duration <- NA
+focal_follow_relay_coop$of1_childtransfer_number   <- NA
+
+for (woman in unique(infant_caregiver$trip_id[-1])) {
+  subset_woman <- subset(infant_caregiver, infant_caregiver$trip_id == woman)
+  
+  # Collapse consecutive duplicate caregivers first
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  focal_follow_relay_coop$of1_childtransfer_duration[focal_follow_relay_coop$ID_focal == woman] <-
+    mean(subset_woman$duration)
+  
+  focal_follow_relay_coop$of1_childtransfer_number[focal_follow_relay_coop$ID_focal == woman] <-
+    nrow(subset_woman) - 1 #we do not want the number of rows but transfers!
+}
+
+summary(focal_follow_relay_coop$of1_childtransfer_number)
+sd(focal_follow_relay_coop$of1_childtransfer_number)
+
+```
+
+\
+
+### No Ground
+
+```{r}
+
+#==================
+# of2: transfers excluding ground
+#==================
+focal_follow_relay_coop$of2_childtransfer_no_ground_duration <- NA
+focal_follow_relay_coop$of2_childtransfer_no_ground_number   <- NA
+
+for (woman in unique(infant_caregiver$trip_id[-1])) {
+  subset_woman <- subset(infant_caregiver, infant_caregiver$trip_id == woman)
+  
+  # Collapse consecutive duplicate caregivers first
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  # Then exclude ground bouts
+  subset_woman_no_ground <- subset(subset_woman, caregiver != "Ground")
+  
+  # Collapse again in case removing ground created new consecutive duplicates
+  # e.g. mother -> Ground -> mother becomes mother -> mother after ground removal
+  subset_woman_no_ground <- collapse_consecutive(subset_woman_no_ground)
+  
+  focal_follow_relay_coop$of2_childtransfer_no_ground_duration[focal_follow_relay_coop$ID_focal == woman] <-
+    mean(subset_woman_no_ground$duration)
+  
+  focal_follow_relay_coop$of2_childtransfer_no_ground_number[focal_follow_relay_coop$ID_focal == woman] <-
+    nrow(subset_woman_no_ground) - 1 #we do not want the number of rows but transfers!
+}
+
+summary(focal_follow_relay_coop$of2_childtransfer_no_ground_number)
+sd(focal_follow_relay_coop$of2_childtransfer_no_ground_number)
+
+```
+
+\
+
+### Mother and Girl
+
+```{r}
+
+focal_follow_relay_coop$of5_transition_Cmother_to_Cgirl <- NA
+focal_follow_relay_coop$of6_transition_Cgirl_to_Cmother <- NA
+focal_follow_relay_coop$of7_transition_Cmother_Cgirl_total <- NA
+
+for (woman in unique(infant_caregiver$trip_id[-1])) {
+  
+  subset_woman <- subset(infant_caregiver, trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  mother_to_girl <- 0
+  girl_to_mother <- 0
+  
+  if (nrow(subset_woman) > 1) {
+    for (i in 2:nrow(subset_woman)) {
+      if (subset_woman$caregiver[i-1] == "mother" &&
+          subset_woman$caregiver[i]   == "girl") {
+        mother_to_girl <- mother_to_girl + 1
+      }
+      if (subset_woman$caregiver[i-1] == "girl" &&
+          subset_woman$caregiver[i]   == "mother") {
+        girl_to_mother <- girl_to_mother + 1
+      }
+    }
+  }
+  
+  focal_follow_relay_coop$of5_transition_Cmother_to_Cgirl[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_girl
+  focal_follow_relay_coop$of6_transition_Cgirl_to_Cmother[focal_follow_relay_coop$ID_focal == woman] <-
+    girl_to_mother
+  focal_follow_relay_coop$of7_transition_Cmother_Cgirl_total[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_girl + girl_to_mother
+}
+
+#summary(focal_follow_relay_coop$of5_transition_Cmother_to_Cgirl[trip_with_girls])
+#summary(focal_follow_relay_coop$of6_transition_Cgirl_to_Cmother[trip_with_girls])
+
+summary(focal_follow_relay_coop$of7_transition_Cmother_Cgirl_total[trip_with_girls])
+sd(focal_follow_relay_coop$of7_transition_Cmother_Cgirl_total[trip_with_girls])
+
+```
+
+\
+
+## Basket-transfer statistics used in the Results
+
+\
+
+### Basket transfers
+
+```{r}
+
+### Basket transfers
+
+#==================
+# ob1: all basket transfers (including ground)
+#==================
+focal_follow_relay_coop$ob1_baskettransfer_duration <- NA
+focal_follow_relay_coop$ob1_baskettransfer_number   <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, basket_carrier$trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  focal_follow_relay_coop$ob1_baskettransfer_duration[focal_follow_relay_coop$ID_focal == woman] <-
+    mean(subset_woman$duration)
+  
+  focal_follow_relay_coop$ob1_baskettransfer_number[focal_follow_relay_coop$ID_focal == woman] <-
+    nrow(subset_woman) - 1
+}
+
+summary(focal_follow_relay_coop$ob1_baskettransfer_duration)
+summary(focal_follow_relay_coop$ob1_baskettransfer_number)
+sd(focal_follow_relay_coop$ob1_baskettransfer_number, na.rm = TRUE)
+
+#==================
+# ob2: basket transfers excluding ground
+#==================
+focal_follow_relay_coop$ob2_baskettransfer_no_ground_duration <- NA
+focal_follow_relay_coop$ob2_baskettransfer_no_ground_number   <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, basket_carrier$trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  subset_woman_no_ground <- subset(subset_woman, caregiver != "Ground")
+  subset_woman_no_ground <- collapse_consecutive(subset_woman_no_ground)
+  
+  focal_follow_relay_coop$ob2_baskettransfer_no_ground_duration[focal_follow_relay_coop$ID_focal == woman] <-
+    mean(subset_woman_no_ground$duration)
+  
+  focal_follow_relay_coop$ob2_baskettransfer_no_ground_number[focal_follow_relay_coop$ID_focal == woman] <-
+    nrow(subset_woman_no_ground) - 1
+}
+
+summary(focal_follow_relay_coop$ob2_baskettransfer_no_ground_duration)
+summary(focal_follow_relay_coop$ob2_baskettransfer_no_ground_number)
+sd(focal_follow_relay_coop$ob2_baskettransfer_no_ground_number, na.rm = TRUE)
+
+#==================
+# ob3/ob4: B_mother <-> B_ground
+#==================
+focal_follow_relay_coop$ob3_transition_Bmother_to_Bground <- NA
+focal_follow_relay_coop$ob4_transition_Bground_to_Bmother <- NA
+focal_follow_relay_coop$ob5_transition_Bmother_Bground_total <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  mother_to_ground <- 0
+  ground_to_mother <- 0
+  
+  if (nrow(subset_woman) > 1) {
+    for (i in 2:nrow(subset_woman)) {
+      if (subset_woman$caregiver[i-1] == "mother" &&
+          subset_woman$caregiver[i]   == "Ground") {
+        mother_to_ground <- mother_to_ground + 1
+      }
+      if (subset_woman$caregiver[i-1] == "Ground" &&
+          subset_woman$caregiver[i]   == "mother") {
+        ground_to_mother <- ground_to_mother + 1
+      }
+    }
+  }
+  
+  focal_follow_relay_coop$ob3_transition_Bmother_to_Bground[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_ground
+  focal_follow_relay_coop$ob4_transition_Bground_to_Bmother[focal_follow_relay_coop$ID_focal == woman] <-
+    ground_to_mother
+  focal_follow_relay_coop$ob5_transition_Bmother_Bground_total[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_ground + ground_to_mother
+}
+
+summary(focal_follow_relay_coop$ob5_transition_Bmother_Bground_total)
+sd(focal_follow_relay_coop$ob5_transition_Bmother_Bground_total, na.rm = TRUE)
+
+#==================
+# ob6/ob7: B_mother <-> B_other (excluding ground)
+#==================
+focal_follow_relay_coop$ob6_transition_Bmother_to_Bother <- NA
+focal_follow_relay_coop$ob7_transition_Bother_to_Bmother <- NA
+focal_follow_relay_coop$ob8_transition_Bmother_Bother_total <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  # Remove ground before checking mother <-> other
+  subset_woman_no_ground <- subset(subset_woman, caregiver != "Ground")
+  subset_woman_no_ground <- collapse_consecutive(subset_woman_no_ground)
+  
+  mother_to_other <- 0
+  other_to_mother <- 0
+  
+  if (nrow(subset_woman_no_ground) > 1) {
+    for (i in 2:nrow(subset_woman_no_ground)) {
+      if (subset_woman_no_ground$caregiver[i-1] == "mother" &&
+          subset_woman_no_ground$caregiver[i]   != "mother") {
+        mother_to_other <- mother_to_other + 1
+      }
+      if (subset_woman_no_ground$caregiver[i-1] != "mother" &&
+          subset_woman_no_ground$caregiver[i]   == "mother") {
+        other_to_mother <- other_to_mother + 1
+      }
+    }
+  }
+  
+  focal_follow_relay_coop$ob6_transition_Bmother_to_Bother[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_other
+  focal_follow_relay_coop$ob7_transition_Bother_to_Bmother[focal_follow_relay_coop$ID_focal == woman] <-
+    other_to_mother
+  focal_follow_relay_coop$ob8_transition_Bmother_Bother_total[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_other + other_to_mother
+}
+
+summary(focal_follow_relay_coop$ob8_transition_Bmother_Bother_total)
+sd(focal_follow_relay_coop$ob8_transition_Bmother_Bother_total, na.rm = TRUE)
+
+#==================
+# ob9/ob10: B_mother <-> B_girl
+#==================
+focal_follow_relay_coop$ob9_transition_Bmother_to_Bgirl   <- NA
+focal_follow_relay_coop$ob10_transition_Bgirl_to_Bmother  <- NA
+focal_follow_relay_coop$ob11_transition_Bmother_Bgirl_total <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  mother_to_girl <- 0
+  girl_to_mother <- 0
+  
+  if (nrow(subset_woman) > 1) {
+    for (i in 2:nrow(subset_woman)) {
+      if (subset_woman$caregiver[i-1] == "mother" &&
+          subset_woman$caregiver[i]   == "girl") {
+        mother_to_girl <- mother_to_girl + 1
+      }
+      if (subset_woman$caregiver[i-1] == "girl" &&
+          subset_woman$caregiver[i]   == "mother") {
+        girl_to_mother <- girl_to_mother + 1
+      }
+    }
+  }
+  
+  focal_follow_relay_coop$ob9_transition_Bmother_to_Bgirl[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_girl
+  focal_follow_relay_coop$ob10_transition_Bgirl_to_Bmother[focal_follow_relay_coop$ID_focal == woman] <-
+    girl_to_mother
+  focal_follow_relay_coop$ob11_transition_Bmother_Bgirl_total[focal_follow_relay_coop$ID_focal == woman] <-
+    mother_to_girl + girl_to_mother
+}
+
+summary(focal_follow_relay_coop$ob11_transition_Bmother_Bgirl_total[trip_with_girls])
+sd(focal_follow_relay_coop$ob11_transition_Bmother_Bgirl_total[trip_with_girls], na.rm = TRUE)
+
+```
+
+\
+
+### Basket and girls
+
+```{r}
+
+#==================
+# ob12/ob13: B_ground <-> B_girl
+#==================
+focal_follow_relay_coop$ob12_transition_Bground_to_Bgirl  <- NA
+focal_follow_relay_coop$ob13_transition_Bgirl_to_Bground  <- NA
+focal_follow_relay_coop$ob14_transition_Bground_Bgirl_total <- NA
+
+for (woman in unique(basket_carrier$trip_id[-1])) {
+  subset_woman <- subset(basket_carrier, trip_id == woman)
+  subset_woman <- collapse_consecutive(subset_woman)
+  
+  ground_to_girl <- 0
+  girl_to_ground <- 0
+  
+  if (nrow(subset_woman) > 1) {
+    for (i in 2:nrow(subset_woman)) {
+      if (subset_woman$caregiver[i-1] == "Ground" &&
+          subset_woman$caregiver[i]   == "girl") {
+        ground_to_girl <- ground_to_girl + 1
+      }
+      if (subset_woman$caregiver[i-1] == "girl" &&
+          subset_woman$caregiver[i]   == "Ground") {
+        girl_to_ground <- girl_to_ground + 1
+      }
+    }
+  }
+  
+  focal_follow_relay_coop$ob12_transition_Bground_to_Bgirl[focal_follow_relay_coop$ID_focal == woman] <-
+    ground_to_girl
+  focal_follow_relay_coop$ob13_transition_Bgirl_to_Bground[focal_follow_relay_coop$ID_focal == woman] <-
+    girl_to_ground
+  focal_follow_relay_coop$ob14_transition_Bground_Bgirl_total[focal_follow_relay_coop$ID_focal == woman] <-
+    ground_to_girl + girl_to_ground
+}
+
+summary(focal_follow_relay_coop$ob14_transition_Bground_Bgirl_total[trip_with_girls])
+sd(focal_follow_relay_coop$ob14_transition_Bground_Bgirl_total[trip_with_girls], na.rm = TRUE)
+
+```
+
+\
+
+# Figure 6: Relay cooperation percentages
+
+This analysis is restricted to the 13 trips in which girls were present. Percentages
+are calculated separately for each trip relative to the focal mother's total time
+spent in the corresponding activity state (foraging, resting, or travelling).
+
+For maternal foraging and resting, basket position is **not** included in the
+childcare calculations. During travelling, the infant-care and basket-carrying
+states are combined because both are part of the depicted load-sharing pattern.
+
+**Important reproducibility note.** The four input files loaded in this script do
+not contain a time-resolved measure of girls' own foraging activity. Therefore,
+the manuscript statistic describing girls foraging during 57.5% of maternal
+resting time cannot be regenerated from these four files alone. The source file
+and code used for that statistic should be added here before archival submission.
+
+```{r figure6-relay-percentages}
+
+# ============================================================
+# FIGURE 6: RELAY COOPERATION PERCENTAGES
+# Only the 13 trips in which girls were present
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Helper functions
+# ------------------------------------------------------------
+
+overlap_2way <- function(df1, df2) {
+
+  total <- 0
+
+  if (nrow(df1) > 0 && nrow(df2) > 0) {
+    for (i in seq_len(nrow(df1))) {
+      for (j in seq_len(nrow(df2))) {
+
+        start <- max(df1$xmin[i], df2$xmin[j])
+        end   <- min(df1$xmax[i], df2$xmax[j])
+
+        total <- total + max(0, end - start)
+      }
+    }
+  }
+
+  total
+}
+
+
+overlap_3way <- function(df1, df2, df3) {
+
+  total <- 0
+
+  if (nrow(df1) > 0 &&
+      nrow(df2) > 0 &&
+      nrow(df3) > 0) {
+
+    for (i in seq_len(nrow(df1))) {
+      for (j in seq_len(nrow(df2))) {
+        for (k in seq_len(nrow(df3))) {
+
+          start <- max(
+            df1$xmin[i],
+            df2$xmin[j],
+            df3$xmin[k]
+          )
+
+          end <- min(
+            df1$xmax[i],
+            df2$xmax[j],
+            df3$xmax[k]
+          )
+
+          total <- total + max(0, end - start)
+        }
+      }
+    }
+  }
+
+  total
+}
+
+
+# Convert HH:MM:SS to seconds
+time_to_seconds <- function(x) {
+
+  x <- strsplit(as.character(x), ":")
+
+  sapply(x, function(z) {
+    as.numeric(z[1]) * 3600 +
+      as.numeric(z[2]) * 60 +
+      as.numeric(z[3])
+  })
+}
+
+
+# ------------------------------------------------------------
+# 2. Identify the 13 trips with girls present
+# ------------------------------------------------------------
+
+trips_with_girls <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_girls > 0
+]
+
+print(trips_with_girls)
+length(trips_with_girls)   # expected: 13
+
+
+# ------------------------------------------------------------
+# 3. Storage
+# ------------------------------------------------------------
+
+relay_results <- data.frame()
+
+
+# ============================================================
+# 4. Main loop
+# ============================================================
+
+for (woman in trips_with_girls) {
+
+  # ==========================================================
+  # A. Build maternal activity timeline directly
+  #    from Waypoints_relay_coop
+  # ==========================================================
+
+  w <- Waypoints_relay_coop %>%
+    filter(ID_focal == woman)
+
+  w$time_sec <- time_to_seconds(w$Time)
+
+  # Duration from each waypoint until the next waypoint
+  w$duration <- c(
+    diff(w$time_sec),
+    NA
+  )
+
+  # Final row has no following interval
+  w <- w[!is.na(w$duration), ]
+
+
+  # ----------------------------------------------------------
+  # Reconstruct travelling state
+  # ----------------------------------------------------------
+
+  walking_state <- FALSE
+  w$walking_state <- FALSE
+
+  for (i in seq_len(nrow(w))) {
+
+    if (!is.na(w$walking[i])) {
+
+      if (w$walking[i] == "start") {
+        walking_state <- TRUE
+      }
+
+      if (w$walking[i] == "stop") {
+        walking_state <- FALSE
+      }
+    }
+
+    w$walking_state[i] <- walking_state
+  }
+
+
+  # ----------------------------------------------------------
+  # Reconstruct maternal foraging state
+  # ----------------------------------------------------------
+
+  foraging_state <- FALSE
+  w$foraging_state <- FALSE
+
+  for (i in seq_len(nrow(w))) {
+
+    if (!is.na(w$foraging[i])) {
+
+      if (w$foraging[i] == "start") {
+        foraging_state <- TRUE
+      }
+
+      if (w$foraging[i] == "stop") {
+        foraging_state <- FALSE
+      }
+    }
+
+    w$foraging_state[i] <- foraging_state
+  }
+
+
+  # resting_behaviour is already coded TRUE/FALSE
+  w$resting_state <- as.logical(w$resting_behaviour)
+
+
+  # ----------------------------------------------------------
+  # Convert maternal intervals to fractions of the whole trip
+  # ----------------------------------------------------------
+
+  trip_duration <- sum(w$duration)
+
+  w$frac <- w$duration / trip_duration
+  w$xmax <- cumsum(w$frac)
+  w$xmin <- c(0, head(w$xmax, -1))
+
+
+  forage_true <- w[w$foraging_state == TRUE, ]
+  rest_true   <- w[w$resting_state == TRUE, ]
+  walk_true   <- w[w$walking_state == TRUE, ]
+
+
+  forage_total <- sum(forage_true$frac)
+  rest_total   <- sum(rest_true$frac)
+  walk_total   <- sum(walk_true$frac)
+
+
+  # ==========================================================
+  # B. Infant-care timeline
+  # ==========================================================
+
+  infant <- infant_caregiver %>%
+    filter(trip_id == woman)
+
+  infant$frac <- infant$duration / sum(infant$duration)
+  infant$xmax <- cumsum(infant$frac)
+  infant$xmin <- c(0, head(infant$xmax, -1))
+
+  mother_care <- infant %>%
+    filter(caregiver == "mother")
+
+  girl_care <- infant %>%
+    filter(caregiver == "girl")
+
+
+  # ==========================================================
+  # C. Basket timeline
+  # ==========================================================
+
+  basket <- basket_carrier %>%
+    filter(trip_id == woman)
+
+  basket$frac <- basket$duration / sum(basket$duration)
+  basket$xmax <- cumsum(basket$frac)
+  basket$xmin <- c(0, head(basket$xmax, -1))
+
+  mother_basket <- basket %>%
+    filter(caregiver == "mother")
+
+  girl_basket <- basket %>%
+    filter(caregiver == "girl")
+
+
+  # ==========================================================
+  # 5. When mothers forage
+  # Basket position is NOT included
+  # ==========================================================
+
+  overlap_F_mothercare <- overlap_2way(
+    forage_true,
+    mother_care
+  )
+
+  overlap_F_girlcare <- overlap_2way(
+    forage_true,
+    girl_care
+  )
+
+
+  pct_F_mothercare <- ifelse(
+    forage_total > 0,
+    overlap_F_mothercare / forage_total * 100,
+    NA
+  )
+
+  pct_F_girlcare <- ifelse(
+    forage_total > 0,
+    overlap_F_girlcare / forage_total * 100,
+    NA
+  )
+
+
+  # ==========================================================
+  # 6. When mothers rest
+  # ==========================================================
+
+  overlap_R_mothercare <- overlap_2way(
+    rest_true,
+    mother_care
+  )
+
+  overlap_R_girlcare <- overlap_2way(
+    rest_true,
+    girl_care
+  )
+
+
+  pct_R_mothercare <- ifelse(
+    rest_total > 0,
+    overlap_R_mothercare / rest_total * 100,
+    NA
+  )
+
+  pct_R_girlcare <- ifelse(
+    rest_total > 0,
+    overlap_R_girlcare / rest_total * 100,
+    NA
+  )
+
+
+  # ==========================================================
+  # 7. When mothers travel
+  # ==========================================================
+
+  # Mother carries basket + girl carries infant
+  overlap_T_Mbasket_Ginfant <- overlap_3way(
+    walk_true,
+    mother_basket,
+    girl_care
+  )
+
+  # Mother carries infant + girl carries basket
+  overlap_T_Minfant_Gbasket <- overlap_3way(
+    walk_true,
+    mother_care,
+    girl_basket
+  )
+
+  # Mother carries both infant and basket
+  overlap_T_Minfant_Mbasket <- overlap_3way(
+    walk_true,
+    mother_care,
+    mother_basket
+  )
+
+
+  pct_T_Mbasket_Ginfant <- ifelse(
+    walk_total > 0,
+    overlap_T_Mbasket_Ginfant / walk_total * 100,
+    NA
+  )
+
+  pct_T_Minfant_Gbasket <- ifelse(
+    walk_total > 0,
+    overlap_T_Minfant_Gbasket / walk_total * 100,
+    NA
+  )
+
+  pct_T_Minfant_Mbasket <- ifelse(
+    walk_total > 0,
+    overlap_T_Minfant_Mbasket / walk_total * 100,
+    NA
+  )
+
+
+  # ==========================================================
+  # 8. Save trip-level results
+  # ==========================================================
+
+  relay_results <- rbind(
+    relay_results,
+    data.frame(
+
+      trip_id = woman,
+
+      forage_mother_care =
+        pct_F_mothercare,
+
+      forage_girl_care =
+        pct_F_girlcare,
+
+      rest_mother_care =
+        pct_R_mothercare,
+
+      rest_girl_care =
+        pct_R_girlcare,
+
+      travel_mother_basket_girl_infant =
+        pct_T_Mbasket_Ginfant,
+
+      travel_mother_infant_girl_basket =
+        pct_T_Minfant_Gbasket,
+
+      travel_mother_infant_and_basket =
+        pct_T_Minfant_Mbasket
+    )
+  )
+}
+
+
+# ============================================================
+# 9. Inspect all 13 trip-level values
+# ============================================================
+
+print(relay_results)
+
+
+# ============================================================
+# 10. Summary function
+# ============================================================
+
+summarise_pct <- function(x) {
+
+  data.frame(
+    N = sum(!is.na(x)),
+    trips_observed = sum(x > 0, na.rm = TRUE),
+    mean = mean(x, na.rm = TRUE),
+    sd = sd(x, na.rm = TRUE),
+    min = min(x, na.rm = TRUE),
+    max = max(x, na.rm = TRUE)
+  )
+}
+
+
+# ============================================================
+# 11. Final Figure 6 summary
+# ============================================================
+
+figure6_summary <- rbind(
+
+  "Mother forages + mother provides infant care" =
+    summarise_pct(
+      relay_results$forage_mother_care
+    ),
+
+  "Mother forages + girl provides infant care" =
+    summarise_pct(
+      relay_results$forage_girl_care
+    ),
+
+  "Mother rests + mother provides infant care + girl forages" =
+    summarise_pct(
+      relay_results$rest_mother_care
+    ),
+
+  "Mother rests + girl provides infant care" =
+    summarise_pct(
+      relay_results$rest_girl_care
+    ),
+
+  "Mother travels + mother carries basket + girl carries infant" =
+    summarise_pct(
+      relay_results$travel_mother_basket_girl_infant
+    ),
+
+  "Mother travels + mother carries infant + girl carries basket" =
+    summarise_pct(
+      relay_results$travel_mother_infant_girl_basket
+    ),
+
+  "Mother travels + mother carries infant and basket" =
+    summarise_pct(
+      relay_results$travel_mother_infant_and_basket
+    )
+)
+
+round(figure6_summary, 1)
+```
+
+# Supplementary Table 3
+
+```{r}
+
+#==================
+# Caregiver x Activity summary table
+#==================
+
+# Get all caregiver categories actually present in the data
+caregiver_levels <- sort(unique(as.character(infant_caregiver$caregiver)))
+
+# Long-format results: one row per trip x caregiver x activity
+caregiver_activity_long <- data.frame()
+
+for (nursing_woman in focal_follow_relay_coop$ID_focal) {
+
+  #------------------
+  # Infant carrying
+  #------------------
+  infant <- subset(infant_caregiver, trip_id == nursing_woman)
+  infant$frac <- infant$duration / sum(infant$duration)
+  infant$xmax <- cumsum(infant$frac)
+  infant$xmin <- c(0, head(infant$xmax, -1))
+
+  #------------------
+  # Foraging / Resting / Walking (same as before)
+  #------------------
+  forage <- subset(foraging_bout, trip_id == nursing_woman)
+  forage$frac <- forage$duration / sum(forage$duration)
+  forage$xmax <- cumsum(forage$frac)
+  forage$xmin <- c(0, head(forage$xmax, -1))
+
+  rest <- subset(rest_bout, trip_id == nursing_woman)
+  rest$frac <- rest$duration / sum(rest$duration)
+  rest$xmax <- cumsum(rest$frac)
+  rest$xmin <- c(0, head(rest$xmax, -1))
+
+  walk <- subset(walking_bout, trip_id == nursing_woman)
+  walk$frac <- walk$duration / sum(walk$duration)
+  walk$xmax <- cumsum(walk$frac)
+  walk$xmin <- c(0, head(walk$xmax, -1))
+
+  forage_true <- subset(forage, forages == 1)
+  rest_true   <- subset(rest, rest == 1)
+  walk_true   <- subset(walk, walks == 1)
+
+  forage_total_frac <- sum(forage_true$frac)
+  rest_total_frac   <- sum(rest_true$frac)
+  walk_total_frac   <- sum(walk_true$frac)
+
+  activities <- list(
+    foraging   = list(bouts = forage_true, total = forage_total_frac),
+    resting    = list(bouts = rest_true,   total = rest_total_frac),
+    travelling = list(bouts = walk_true,   total = walk_total_frac)
+  )
+
+  #------------------
+  # Loop over caregiver categories x activities
+  #------------------
+  for (cg in caregiver_levels) {
+    cg_bouts <- subset(infant, caregiver == cg)
+
+    for (act_name in names(activities)) {
+      act_bouts <- activities[[act_name]]$bouts
+      act_total <- activities[[act_name]]$total
+
+      ov <- overlap_2way(act_bouts, cg_bouts)
+      norm_val <- ifelse(act_total > 0, ov / act_total, NA)
+
+      caregiver_activity_long <- rbind(
+        caregiver_activity_long,
+        data.frame(
+          trip_id   = nursing_woman,
+          caregiver = cg,
+          activity  = act_name,
+          norm_frac = norm_val
+        )
+      )
+    }
+  }
+}
+
+#==================
+# Average across trips -> wide table (caregiver rows x activity columns)
+#==================
+caregiver_activity_summary <- aggregate(
+  norm_frac ~ caregiver + activity,
+  data = caregiver_activity_long,
+  FUN = mean, na.rm = TRUE
+)
+
+caregiver_activity_table <- reshape(
+  caregiver_activity_summary,
+  idvar = "caregiver",
+  timevar = "activity",
+  direction = "wide"
+)
+
+# clean up column names: norm_frac.foraging -> foraging, etc.
+names(caregiver_activity_table) <- gsub("norm_frac\\.", "", names(caregiver_activity_table))
+
+# reorder columns nicely
+caregiver_activity_table <- caregiver_activity_table[, c("caregiver", "foraging", "resting", "travelling")]
+
+# convert to percentages, rounded
+caregiver_activity_table$foraging   <- round(caregiver_activity_table$foraging   * 100, 1)
+caregiver_activity_table$resting    <- round(caregiver_activity_table$resting    * 100, 1)
+caregiver_activity_table$travelling <- round(caregiver_activity_table$travelling * 100, 1)
+
+caregiver_activity_table
+
+```
