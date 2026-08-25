@@ -1664,5 +1664,298 @@ caregiver_activity_table
 
 ```
 
+###### Table 1: Assistance during foraging trips
 
+This analysis calculates the frequency and duration of infant-care and
+basket-carrying assistance during focal women's foraging trips.
+
+For age- and gender-specific categories, calculations include only trips in
+which at least one member of that category was present. A category that was
+present but did not provide assistance contributes a value of zero. Trips in
+which the category was absent are excluded.
+
+For the pooled ``Any other group member'' category, calculations are restricted
+to the 17 trips in which the focal woman was accompanied by at least one other
+group member.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+```
+
+## 1. Prepare infant-care data
+
+The unknown infant-care category (`?`) is combined with `Ground`.
+
+```{r prepare-infant-data}
+infant_caregiver2 <- infant_caregiver %>%
+  mutate(
+    caregiver = ifelse(caregiver == "?", "Ground", caregiver)
+  )
+```
+
+## 2. Identify trips in which each category was present
+
+```{r category-presence}
+trips_women_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_women > 0
+]
+
+trips_men_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_men > 0
+]
+
+trips_girls_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_girls > 0
+]
+
+trips_boys_present <- focal_follow_relay_coop$ID_focal[
+  focal_follow_relay_coop$n_boys > 0
+]
+
+trips_accompanied <- focal_follow_relay_coop %>%
+  filter(
+    n_women > 0 |
+    n_men > 0 |
+    n_girls > 0 |
+    n_boys > 0
+  ) %>%
+  pull(ID_focal)
+```
+
+### Check denominators
+
+These should reproduce the denominators used in Table 1.
+
+```{r check-denominators}
+length(trips_accompanied)    # expected: 17
+length(trips_women_present)  # expected: 14
+length(trips_men_present)    # expected: 6
+length(trips_girls_present)  # expected: 13
+length(trips_boys_present)   # expected: 11
+```
+
+# Infant care
+
+## 3. Calculate trip-level infant-care percentages
+
+For each trip, calculate the percentage of total trip duration associated with
+each infant-care category.
+
+```{r infant-trip-percentages}
+caregiver_trip <- infant_caregiver2 %>%
+  group_by(trip_id, caregiver) %>%
+  summarise(
+    duration = sum(duration, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(trip_id) %>%
+  mutate(
+    percent = duration / sum(duration, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+```
+
+## 4. Infant care by category, conditional on presence
+
+If a category was present but did not provide infant care, the trip contributes
+0%. If the category was absent, the trip is excluded.
+
+```{r infant-summary-function}
+summarise_care_when_present <- function(category, trips_present) {
+
+  x <- data.frame(trip_id = trips_present) %>%
+    left_join(
+      caregiver_trip %>%
+        filter(caregiver == category) %>%
+        select(trip_id, percent),
+      by = "trip_id"
+    ) %>%
+    mutate(
+      percent = replace_na(percent, 0)
+    )
+
+  x %>%
+    summarise(
+      caregiver = category,
+      N_present = n(),
+      N_helped = sum(percent > 0),
+      pct_trips_helped = N_helped / N_present * 100,
+      mean = mean(percent),
+      sd = sd(percent),
+      min = min(percent),
+      max = max(percent)
+    )
+}
+```
+
+```{r infant-category-summary}
+caregiver_summary_present <- bind_rows(
+  summarise_care_when_present("woman",  trips_women_present),
+  summarise_care_when_present("father", trips_men_present),
+  summarise_care_when_present("girl",   trips_girls_present),
+  summarise_care_when_present("boy",    trips_boys_present)
+)
+
+caregiver_summary_present
+```
+
+Expected frequencies:
+
+- Other women: 8/14
+- Fathers: 4/6
+- Girls: 9/13
+- Boys: 4/11
+
+## 5. Infant-care assistance from any other group member
+
+`mother` and `Ground` are excluded when defining assistance from another
+individual.
+
+```{r infant-any-helper}
+infant_help_trip <- infant_caregiver2 %>%
+  filter(trip_id %in% trips_accompanied) %>%
+  mutate(
+    other_help = !caregiver %in% c("mother", "Ground")
+  ) %>%
+  group_by(trip_id) %>%
+  summarise(
+    total_duration = sum(duration, na.rm = TRUE),
+    other_duration = sum(duration[other_help], na.rm = TRUE),
+    percent_other = other_duration / total_duration * 100,
+    .groups = "drop"
+  )
+
+infant_help_summary <- infant_help_trip %>%
+  summarise(
+    N = n(),
+    N_helped = sum(other_duration > 0),
+    percent_trips_helped = N_helped / N * 100,
+    mean = mean(percent_other),
+    sd = sd(percent_other),
+    min = min(percent_other),
+    max = max(percent_other)
+  )
+
+infant_help_summary
+```
+
+Expected result: **17/17 (100%)**, mean = **38.9%**, SD = **27.0%**,
+range = **1.9--100.0%**.
+
+# Basket carrying
+
+## 6. Calculate trip-level basket-carrying percentages
+
+```{r basket-trip-percentages}
+basket_trip <- basket_carrier %>%
+  group_by(trip_id, caregiver) %>%
+  summarise(
+    duration = sum(duration, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(trip_id) %>%
+  mutate(
+    percent = duration / sum(duration, na.rm = TRUE) * 100
+  ) %>%
+  ungroup()
+```
+
+## 7. Basket carrying by category, conditional on presence
+
+```{r basket-summary-function}
+summarise_basket_when_present <- function(category, trips_present) {
+
+  x <- data.frame(trip_id = trips_present) %>%
+    left_join(
+      basket_trip %>%
+        filter(caregiver == category) %>%
+        select(trip_id, percent),
+      by = "trip_id"
+    ) %>%
+    mutate(
+      percent = replace_na(percent, 0)
+    )
+
+  x %>%
+    summarise(
+      caregiver = category,
+      N_present = n(),
+      N_carried = sum(percent > 0),
+      pct_trips_carried = N_carried / N_present * 100,
+      mean = mean(percent),
+      sd = sd(percent),
+      min = min(percent),
+      max = max(percent)
+    )
+}
+```
+
+```{r basket-category-summary}
+basket_summary_present <- bind_rows(
+  summarise_basket_when_present("woman",  trips_women_present),
+  summarise_basket_when_present("father", trips_men_present),
+  summarise_basket_when_present("girl",   trips_girls_present),
+  summarise_basket_when_present("boy",    trips_boys_present)
+)
+
+basket_summary_present
+```
+
+Expected frequencies:
+
+- Other women: 4/14
+- Fathers: 0/6
+- Girls: 8/13
+- Boys: 3/11
+
+## 8. Basket-carrying assistance from any other group member
+
+```{r basket-any-helper}
+basket_help_trip <- basket_carrier %>%
+  filter(trip_id %in% trips_accompanied) %>%
+  mutate(
+    other_help = !caregiver %in% c("mother", "Ground")
+  ) %>%
+  group_by(trip_id) %>%
+  summarise(
+    total_duration = sum(duration, na.rm = TRUE),
+    other_duration = sum(duration[other_help], na.rm = TRUE),
+    percent_other = other_duration / total_duration * 100,
+    .groups = "drop"
+  )
+
+basket_help_summary <- basket_help_trip %>%
+  summarise(
+    N = n(),
+    N_helped = sum(other_duration > 0),
+    percent_trips_helped = N_helped / N * 100,
+    mean = mean(percent_other),
+    sd = sd(percent_other),
+    min = min(percent_other),
+    max = max(percent_other)
+  )
+
+basket_help_summary
+```
+
+Expected result: **12/17 (70.6%)**, mean = **18.5%**, SD = **21.2%**,
+range = **0.0--67.7%**.
+
+# Final checks
+
+The frequencies calculated from the duration data should reproduce the
+frequencies reported in Table 1.
+
+```{r final-checks}
+caregiver_summary_present %>%
+  select(caregiver, N_present, N_helped, pct_trips_helped)
+
+basket_summary_present %>%
+  select(caregiver, N_present, N_carried, pct_trips_carried)
+
+infant_help_summary
+
+basket_help_summary
+```
 
